@@ -1,25 +1,32 @@
-package net.hauntedstudio.bp.datastore.controllers;
+package net.hauntedstudio.bp.datastore.controllers.auth;
 
 //Controller handles everything related to authentication
 
 import com.google.gson.JsonObject;
+import net.hauntedstudio.bp.datastore.entity.CharacterSlotEntity;
 import net.hauntedstudio.bp.datastore.entity.PlayerEntity;
 import net.hauntedstudio.bp.datastore.entity.UserEntity;
 import net.hauntedstudio.bp.datastore.entity.Users;
-import net.hauntedstudio.bp.datastore.repository.UsersRepository;
 import net.hauntedstudio.bp.datastore.request.auth.LoginLauncherRequest;
 import net.hauntedstudio.bp.datastore.response.auth.LoginLauncherResponse;
+import net.hauntedstudio.bp.datastore.response.users.OptionResponse;
+import net.hauntedstudio.bp.datastore.response.users.PersonalNewResponse;
+import net.hauntedstudio.bp.datastore.response.users.lci.LastContentInfoResponse;
 import net.hauntedstudio.bp.datastore.services.TokenService;
-import net.hauntedstudio.bp.datastore.services.auth.PlayerService;
-import net.hauntedstudio.bp.datastore.services.auth.UserService;
-import net.hauntedstudio.bp.datastore.services.auth.UsersService;
+import net.hauntedstudio.bp.datastore.services.user.CharacterSlotService;
+import net.hauntedstudio.bp.datastore.services.user.PlayerService;
+import net.hauntedstudio.bp.datastore.services.user.UserService;
+import net.hauntedstudio.bp.datastore.services.user.UsersService;
 import net.hauntedstudio.bp.datastore.utils.RequestManager;
-import net.hauntedstudio.bp.datastore.utils.UUIDGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.UUID;
 
 @RestController
@@ -34,12 +41,15 @@ public class AuthenticationController {
 
     private final PlayerService playerService;
 
+    private final CharacterSlotService characterSlotService;
+
     @Autowired
-    public AuthenticationController(TokenService tokenService, PlayerService playerService, UserService userService, UsersService usersService) {
+    public AuthenticationController(TokenService tokenService, PlayerService playerService, UserService userService, UsersService usersService, CharacterSlotService characterSlotService) {
         this.tokenService = tokenService;
         this.userService = userService;
         this.usersService = usersService;
         this.playerService = playerService;
+        this.characterSlotService = characterSlotService;
     }
 
     // Game Login Startup
@@ -47,24 +57,26 @@ public class AuthenticationController {
     public ResponseEntity<LoginLauncherResponse> loginLauncher(@RequestBody LoginLauncherRequest request) {
         LoginLauncherResponse response = new LoginLauncherResponse();
         //send Post Request to the Authentication Service
-        //TODO: So long AntiCheat is not removed, hardcode the code.
         String luuid = this.loginWithCode(request.getOc_authorization_code());
-        String uuid = UUID.randomUUID().toString();
         //IF the UUID is not null or If login is successful
         if (luuid != null) {
-            //Check if a User with that UUID exists
-            Users user = usersService.getUserByLnchuuid(luuid);
-            if (user == null) {
-                //If no user exists, create a new user
+            if (!usersService.existsByLnchuuid(luuid)) {
+                //IF the login is successful but the user does not exist
+                //Create a new User
+                Users user = new Users();
+                UserEntity userEntity = new UserEntity();
+                userEntity.set_id(UUID.randomUUID().toString());
+                userEntity.setName("bn-user");
+
                 PlayerEntity playerEntity = new PlayerEntity();
-                playerEntity.setUser_id(uuid);
+                playerEntity.setUser_id(userEntity.get_id());
                 playerEntity.setMax_character_slot(10);
                 playerEntity.setAt_network_cafe(0);
                 playerEntity.setLast_loggedin_character_id(null);
                 playerEntity.setTotal_play_time(0);
                 playerEntity.setLogin_count(1);
                 playerEntity.setAccesses("{\\\"0.0.0.0\\\":1730871051}");
-                playerEntity.setLast_login(null);
+                playerEntity.setLast_login(Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant()));
                 playerEntity.setLast_select_character_at(null);
                 playerEntity.setCreated_ip("0.0.0.0");
                 playerEntity.setLast_login_ip("0.0.0.0");
@@ -79,23 +91,28 @@ public class AuthenticationController {
                 playerEntity.setBan_basis(0);
                 playerEntity.setBirthday(null);
                 playerEntity.setBirthday_modify_count(0);
-                //Save the new user
                 playerService.createPlayer(playerEntity);
-
-                UserEntity userEntity = new UserEntity();
-                userEntity.set_id(uuid);
-                userEntity.setName("bn-user");
                 userEntity.setPlayer(playerEntity);
+
+                CharacterSlotEntity characterSlotEntity = new CharacterSlotEntity();
+                characterSlotEntity.setUser_id(userEntity.get_id());
+                characterSlotEntity.setCharacter_slot_initial(2);
+                characterSlotEntity.setCharacter_slot_buy_max(8);
+                characterSlotEntity.setAdditional_character_slot(0);
+                characterSlotService.createCharacterSlot(characterSlotEntity);
+                userEntity.setCharacterSlot(characterSlotEntity);
+
                 userService.createUser(userEntity);
 
-                Users newUser = new Users();
-                newUser.setLnchuuid(luuid);
-                newUser.setUser(userEntity);
-                usersService.createUser(newUser);
+                user.setLnchuuid(luuid);
+                user.setUser(userEntity);
+                usersService.createUser(user);
             }
 
+            Users user = usersService.getUserByLnchuuid(luuid);
+            String uuid = user.getUser().get_id();
+
             String token = tokenService.generateToken(uuid);
-            assert user != null;
             response.setUser_id(user.getUser().get_id());
             response.setApi_token(token);
             response.setSp_status(0);
@@ -126,10 +143,44 @@ public class AuthenticationController {
             throw new RuntimeException(e);
         }
 
-        if (response != null) {
-            return response;
-        }
-        return null;
+        return response;
+    }
+
+    // Get Player and Character information
+
+    //TODO: actually createa a settings table, for now hardcode the values
+    @PostMapping("users/get_option")
+    public ResponseEntity<OptionResponse> getOptions() {
+        OptionResponse response = new OptionResponse();
+        response.setSb_ret_code(0);
+        return ResponseEntity.ok(response);
+    }
+
+    //Send personal new (Player Data);
+    @PostMapping("users/personal_new")
+    public ResponseEntity<PersonalNewResponse> personalNew(@RequestHeader(value = "Authorization") String authorizationHeader) {
+        PersonalNewResponse response = new PersonalNewResponse();
+        String token = authorizationHeader.substring(7);
+
+        String uuid = tokenService.getUUIDfromToken(token);
+
+        LastContentInfoResponse lastContentInfoResponse = new LastContentInfoResponse();
+        lastContentInfoResponse.setCharacter_id("");
+        LastContentInfoResponse.Party party = new LastContentInfoResponse.Party();
+        party.setParty_id("");
+        party.setParty_type(0);
+        party.setExpire_time(0);
+        lastContentInfoResponse.setParty(party);
+
+
+        response.set_id(uuid);
+        response.setName("bn-user");
+        response.setCharacters(new ArrayList<>());
+        response.setPlayer(playerService.getPlayerByUserId(uuid));
+        response.setLast_content_info(lastContentInfoResponse);
+        response.setCharacter_slot(characterSlotService.getCharacterSlotByUserId(uuid));
+
+        return ResponseEntity.ok(response);
     }
 
 

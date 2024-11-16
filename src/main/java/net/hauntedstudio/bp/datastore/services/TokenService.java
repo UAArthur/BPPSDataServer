@@ -13,12 +13,16 @@ import java.util.Map;
 @Service
 public class TokenService {
 
+    /*
+    s1 = uuid
+    s2 = token;
+     */
     private final Map<String, String> tokenStore = new HashMap<>();
 
-    public String generateToken(String username) {
+    public String generateToken(String uuid) {
         // Generate a 191-byte random array to ensure the token is 255 characters when Base64 encoded
         String token = TokenUtil.generateToken(191);
-        tokenStore.put(token, username);
+        tokenStore.put(token, uuid);
         return token;
     }
 
@@ -34,6 +38,10 @@ public class TokenService {
         return tokenStore.containsKey(token);
     }
 
+
+    public String getUUIDfromToken(String token) {
+        return tokenStore.get(token);
+    }
     public Authentication getAuthentication(String token) {
         String username = validateToken(token);
         if (username != null) {

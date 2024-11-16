@@ -1,4 +1,4 @@
-package net.hauntedstudio.bp.datastore.services.auth;
+package net.hauntedstudio.bp.datastore.services.user;
 
 import net.hauntedstudio.bp.datastore.entity.UserEntity;
 import net.hauntedstudio.bp.datastore.repository.UserRepository;

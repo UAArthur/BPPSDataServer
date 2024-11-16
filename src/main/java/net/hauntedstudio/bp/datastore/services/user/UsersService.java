@@ -1,4 +1,4 @@
-package net.hauntedstudio.bp.datastore.services.auth;
+package net.hauntedstudio.bp.datastore.services.user;
 
 import net.hauntedstudio.bp.datastore.entity.Users;
 import net.hauntedstudio.bp.datastore.repository.UsersRepository;
@@ -17,5 +17,9 @@ public class UsersService {
 
     public Users getUserByLnchuuid(String lnchuuid) {
         return userRepository.findByLnchuuid(lnchuuid);
+    }
+
+    public boolean existsByLnchuuid(String lnchuuid) {
+        return userRepository.existsByLnchuuid(lnchuuid);
     }
 }

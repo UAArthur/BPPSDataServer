@@ -18,4 +18,8 @@ public class UserEntity {
     @JoinColumn(name = "player_user_id")
     private PlayerEntity player;
 
+    @OneToOne
+    @JoinColumn(name = "character_slot_id")
+    private CharacterSlotEntity characterSlot;
+
 }

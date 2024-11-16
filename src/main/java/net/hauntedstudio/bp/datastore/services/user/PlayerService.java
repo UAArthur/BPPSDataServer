@@ -1,4 +1,4 @@
-package net.hauntedstudio.bp.datastore.services.auth;
+package net.hauntedstudio.bp.datastore.services.user;
 
 import net.hauntedstudio.bp.datastore.entity.PlayerEntity;
 import net.hauntedstudio.bp.datastore.repository.PlayerRepository;
@@ -13,5 +13,9 @@ public class PlayerService {
 
     public void createPlayer(PlayerEntity playerEntity) {
         playerRepository.saveAndFlush(playerEntity);
+    }
+
+    public PlayerEntity getPlayerByUserId(String userId) {
+        return playerRepository.findByUser_id(userId);
     }
 }
